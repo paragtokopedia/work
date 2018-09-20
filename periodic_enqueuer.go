@@ -11,7 +11,7 @@ import (
 
 const (
 	periodicEnqueuerSleep   = 2 * time.Minute
-	periodicEnqueuerHorizon = 4 * time.Minute
+	periodicEnqueuerHorizon = 60 * time.Minute
 )
 
 type periodicEnqueuer struct {
