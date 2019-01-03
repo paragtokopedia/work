@@ -216,7 +216,7 @@ func (w *worker) processJob(job *Job) {
 		job.failed(runErr)
 		fate = w.jobFate(jt, job)
 	}
-	w.removeJobFromInProgress(job, fate)
+	w.removeJobFromInProgress(job, fate, 0)
 }
 
 func (w *worker) getAndDeleteUniqueJob(job *Job) *Job {
@@ -264,7 +264,7 @@ func (w *worker) getAndDeleteUniqueJob(job *Job) *Job {
 	return jobWithArgs
 }
 
-func (w *worker) removeJobFromInProgress(job *Job, fate terminateOp) {
+func (w *worker) removeJobFromInProgress(job *Job, fate terminateOp, retryCount int) {
 	conn := w.pool.Get()
 	defer conn.Close()
 
@@ -274,7 +274,13 @@ func (w *worker) removeJobFromInProgress(job *Job, fate terminateOp) {
 	conn.Send("HINCRBY", redisKeyJobsLockInfo(w.namespace, job.Name), w.poolID, -1)
 	fate(conn)
 	if _, err := conn.Do("EXEC"); err != nil {
-		logError("worker.remove_job_from_in_progress.lrem", err)
+		logError("worker.remove_job_from_in_progress.lrem "+fmt.Sprintf("Job : %s, %+v", job.Name, job), err)
+		if retryCount < 5 {
+			logError("retrying  name = "+job.Name+" count = "+fmt.Sprintf("%d", retryCount), err)
+			w.removeJobFromInProgress(job, fate, retryCount+1)
+		} else {
+			logError("not retrying  name = "+job.Name+" count = "+fmt.Sprintf("%d", retryCount), err)
+		}
 	}
 }
 
